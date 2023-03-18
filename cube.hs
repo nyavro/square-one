@@ -97,4 +97,4 @@ step (cube:cs) = do
 
 steps :: Cube -> [([Cube], Map Cube [Cube])]
 steps cube = iterate fn ([cube], empty) where
-    fn (cs,mp) = runState (step (take 10 cs)) mp
+    fn (cs,mp) = runState (step cs) mp
