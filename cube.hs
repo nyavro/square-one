@@ -1,6 +1,6 @@
 import Data.Bits((.&.),(.|.),shiftL,shiftR)
-import Data.List(group,sort,nub,partition,splitAt)
-import Data.Map (Map,empty,insert,member,size,foldWithKey)
+import Data.List(group,sort,nub,partition,splitAt,find)
+import Data.Map (Map,empty,insert,member)
 import Data.Functor.Identity
 import Control.Monad.Trans.State
 
@@ -38,9 +38,8 @@ bits n = reverse $ bits' 12 n where
 --      11/0 1   
 --       / H
        
-
-done = Cube (Side 3510 True) (Side 3510 True)
-cube0 = Cube (Side 3135 True) (Side 3510 True)
+done = minifyCube $ Cube (Side 3510 True) (Side 3510 True)
+cube0 = minifyCube $ Cube (Side 3135 True) (Side 3510 True)
 
 --Rotates side clockwise
 rotateSide :: Side -> Side
@@ -53,7 +52,10 @@ distinctRotations :: Side -> [Side]
 distinctRotations side = side:(takeWhile (/=side) $ tail $ iterate rotateSide side)
 
 --Checks if side is flippable
-isFlippable (Side _ flippable) = flippable
+isFlippable (Side code flippable) | flippable = even $ countOnes (code `shiftR` 6)
+                                  | otherwise = False where
+    countOnes n | odd n = 1 + countOnes (n `div` 2)
+                | otherwise = 0
 
 --List of flippable distinct side rotations
 flippableRotations :: Side -> [Side]
@@ -63,12 +65,12 @@ flippableRotations = filter isFlippable . distinctRotations
 flipCube :: Cube -> [Cube]
 flipCube (Cube up down) | isFlippable up = [Cube up' down'] 
                         | otherwise = [] where
-    toPair (Side code _) = (code `shiftR` 6, code .&. 63)
-    fromPair (l,h) = Side ((l `shiftL` 6) .|. h) True
     (upL, upH) = toPair up
     (dwL, dwH) = toPair down
-    up' = fromPair (upL, dwH)
-    down' = fromPair (dwL, upH)     
+    down' = fromPair (upL, dwH)
+    up' = fromPair (dwL, upH)    
+    toPair (Side code _) = (code `shiftR` 6, code .&. 63)
+    fromPair (l,h) = Side ((l `shiftL` 6) .|. h) True
 
 --'Minified' representation of cube 
 minifyCube :: Cube -> Cube
@@ -80,21 +82,44 @@ derivedCubes :: Cube -> [Cube]
 derivedCubes (Cube up down) = nub [minifyCube flp | up' <- flippableRotations up, down' <- flippableRotations down, flp <- flipCube (Cube up' down')]
 
 
-step :: [Cube] -> State (Map Cube [Cube]) [Cube]
-step [] = do
+--Gets cubes derived from given cubes with path
+traceStep :: [[Cube]] -> State (Map Cube [Cube]) [[Cube]]
+traceStep [] = do
     return []
-step (cube:cs) = do
-    --current map of cube to it's derived cubes
+traceStep (path:cs) = do
+    let cube = head path
     mp <- get
     if (cube `member` mp)
-        then (step cs)
+        then (traceStep cs)
         else do
     let derived = derivedCubes cube
-    let (seen, new) = partition (`member` mp) derived
+    let new = map (:path) $ filter (not.(`member` mp)) derived
     put (insert cube derived mp)
-    rest <- step cs
-    return (new++rest)
+    rest <- traceStep cs
+    return (new ++ rest)
+
+--Trace of cube transitions between two states
+trace :: Cube -> Cube -> Maybe [Cube]
+trace from to = find fn $ fst $ trace' ([[from]], empty) where
+    trace' (cs,mp) | (any fn cs) || null cs = (cs, mp)
+                   | otherwise = trace' $ runState (traceStep cs) mp
+    fn = (==to).head
 
 steps :: Cube -> [([Cube], Map Cube [Cube])]
 steps cube = iterate fn ([cube], empty) where
     fn (cs,mp) = runState (step cs) mp
+    --Gets cubes derived from given cubes and updates transitions graph
+    step :: [Cube] -> State (Map Cube [Cube]) [Cube]
+    step [] = do
+        return []
+    step (cube:cs) = do
+        --current map of cube to it's derived cubes
+        mp <- get
+        if (cube `member` mp)
+            then (step cs)
+            else do
+        let derived = derivedCubes cube
+        let new = filter (not.(`member` mp)) derived
+        put (insert cube derived mp)
+        rest <- step cs
+        return (new++rest)
