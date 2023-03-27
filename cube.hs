@@ -1,15 +1,15 @@
 import Data.Bits((.&.),(.|.),shiftL,shiftR)
 import Data.List(group,sort,nub,partition,splitAt,find)
-import Data.Map (Map,empty,insert,member)
+import Data.Map (Map,empty,insert,member,keys)
 import Data.Functor.Identity
 import Control.Monad.Trans.State
 
-data Side = Side Int Bool deriving Eq 
-data Cube = Cube Side Side deriving (Show,Eq)
+data Side = Side {code :: Int, isCut :: Bool} deriving Eq 
+data Cube = Cube {up :: Side, down :: Side} deriving (Show,Eq)
 
 instance Show Side where
-    show (Side code flippable) = ((bits code) >>= show) ++ ps where
-        ps | flippable = ""
+    show (Side code isCut) = ((bits code) >>= show) ++ ps where
+        ps | isCut = ""
            | otherwise = "-"
 
 instance Ord Side where
@@ -43,17 +43,16 @@ cube0 = minifyCube $ Cube (Side 3135 True) (Side 3510 True)
 
 --Rotates side clockwise
 rotateSide :: Side -> Side
-rotateSide (Side code flippable) = Side code' flippable' where
+rotateSide (Side code isCut) = Side code' isCut' where
     code' = (code `shiftR` 1) .|. ((code .&. 1) `shiftL` 11)
-    flippable' = (not flippable) || even code
+    isCut' = (not isCut) || even code
 
 --List of distinct side rotations
 distinctRotations :: Side -> [Side]
 distinctRotations side = side:(takeWhile (/=side) $ tail $ iterate rotateSide side)
 
 --Checks if side is flippable
-isFlippable (Side code flippable) | flippable = even $ countOnes (code `shiftR` 6)
-                                  | otherwise = False where
+isFlippable (Side code isCut) = isCut && (even $ countOnes (code `shiftR` 6)) where
     countOnes n | odd n = 1 + countOnes (n `div` 2)
                 | otherwise = 0
 
