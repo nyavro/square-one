@@ -4,23 +4,20 @@ import Data.Map (Map,empty,insert,member,keys)
 import Data.Functor.Identity
 import Control.Monad.Trans.State
 
-data Side = Side {code :: Int, isCut :: Bool} deriving Eq 
+data Piece = Triangle | Kite deriving (Eq, Ord, Enum, Show)
+data Side = Side {pieces :: [Piece], isCut :: Bool} deriving Eq
 data Cube = Cube {up :: Side, down :: Side} deriving (Show,Eq)
 
 instance Show Side where
-    show (Side code isCut) = ((bits code) >>= show) ++ ps where
-        ps | isCut = ""
-           | otherwise = "-"
+    show (Side pieces isCut) = (show pieces) ++ ps where
+        ps | isCut = "-"
+           | otherwise = ""
 
 instance Ord Side where
     compare (Side a _) (Side b _) = compare a b
 
 instance Ord Cube where
     compare (Cube aUp aDown) (Cube bUp bDown) = compare (aUp,aDown) (bUp,bDown)
-
-bits n = reverse $ bits' 12 n where
-    bits' 0 k = []
-    bits' m k = (k `mod` 2):bits' (m-1) (k `div` 2) 
 
 --up:            / H
 --         10 11/0 
@@ -37,39 +34,54 @@ bits n = reverse $ bits' 12 n where
 --  10     /    2
 --      11/0 1   
 --       / H
+
+construct (up,upCt) (down,downCt) | (length kites)==(length triangles) && (length kites) == 8 = Cube (Side up upCt) (Side down downCt)
+                                  | otherwise = error "Invalid cube" where
+    (kites, triangles) = partition (==Kite) (up ++ down)
        
-done = minifyCube $ Cube (Side 3510 True) (Side 3510 True)
-cube0 = minifyCube $ Cube (Side 3135 True) (Side 3510 True)
+--Complete cube
+done = minifyCube $ construct 
+    ([Kite,Triangle,Kite,Triangle,Kite,Triangle,Kite,Triangle], False) 
+    ([Kite,Triangle,Kite,Triangle,Kite,Triangle,Kite,Triangle], False)
+--Some random state
+cube0 = minifyCube $ construct 
+    ([Triangle,Triangle,Triangle,Triangle,Kite,Kite,Kite,Kite], False)
+    ([Kite,Triangle,Kite,Triangle,Kite,Triangle,Kite,Triangle], False)
+--Cube 8 steps from done
+devil = minifyCube $ construct 
+    ([Triangle,Triangle,Kite,Triangle,Kite,Kite,Triangle,Kite], False) 
+    ([Triangle,Kite,Triangle,Kite,Triangle,Kite,Triangle,Kite], False)
 
 --Rotates side clockwise
-rotateSide :: Side -> Side
-rotateSide (Side code isCut) = Side code' isCut' where
-    code' = (code `shiftR` 1) .|. ((code .&. 1) `shiftL` 11)
-    isCut' = (not isCut) || even code
+rotateSide::Side -> Side
+rotateSide (Side pieces isCut) | isCut = Side pieces False
+                               | otherwise = Side (p':ps') (p'==Kite) where
+    p' = last pieces
+    ps' = init pieces
 
 --List of distinct side rotations
 distinctRotations :: Side -> [Side]
 distinctRotations side = side:(takeWhile (/=side) $ tail $ iterate rotateSide side)
 
---Checks if side is flippable
-isFlippable (Side code isCut) = isCut && (even $ countOnes (code `shiftR` 6)) where
-    countOnes n | odd n = 1 + countOnes (n `div` 2)
-                | otherwise = 0
+splitSide :: Side -> [([Piece],[Piece])]
+splitSide (Side pieces isCut) | isCut || hCount /= halfSize = []
+                              | otherwise = [(reverse h, l)] where
+    (h,l,hCount) = head $ dropWhile (\(_,_,c) -> c<halfSize) $ iterate (\(cur,(r:rs),c) -> (r:cur,rs,c+1+fromEnum r)) ([],pieces,0)
+    halfSize = 6
 
 --List of flippable distinct side rotations
-flippableRotations :: Side -> [Side]
-flippableRotations = filter isFlippable . distinctRotations
+flippableRotations :: Side -> [([Piece],[Piece])]
+flippableRotations = (>>= splitSide) . distinctRotations
+
+flipPair :: ([Piece],[Piece]) -> ([Piece],[Piece]) -> Cube
+flipPair (upH,upL) (downH, downL) = Cube (Side (downL++upH) False) (Side (upL ++ downH) False)
 
 --Flips cube around axis 11/0 -- 6/5
 flipCube :: Cube -> [Cube]
-flipCube (Cube up down) | isFlippable up = [Cube up' down'] 
-                        | otherwise = [] where
-    (upL, upH) = toPair up
-    (dwL, dwH) = toPair down
-    down' = fromPair (upL, dwH)
-    up' = fromPair (dwL, upH)    
-    toPair (Side code _) = (code `shiftR` 6, code .&. 63)
-    fromPair (l,h) = Side ((l `shiftL` 6) .|. h) True
+flipCube (Cube up down) = do
+    upSplit <- splitSide up
+    downSplit <- splitSide down
+    return $ flipPair upSplit downSplit
 
 --'Minified' representation of cube 
 minifyCube :: Cube -> Cube
@@ -78,7 +90,7 @@ minifyCube (Cube up down) = Cube up' down' where
 
 --Get minified cubes one flip from given
 derivedCubes :: Cube -> [Cube]
-derivedCubes (Cube up down) = nub [minifyCube flp | up' <- flippableRotations up, down' <- flippableRotations down, flp <- flipCube (Cube up' down')]
+derivedCubes (Cube up down) = nub [minifyCube $ flipPair up' down' | up' <- flippableRotations up, down' <- flippableRotations down]
 
 
 --Gets cubes derived from given cubes with path
@@ -122,3 +134,5 @@ steps cube = iterate fn ([cube], empty) where
         put (insert cube derived mp)
         rest <- step cs
         return (new++rest)
+
+
