@@ -57,11 +57,11 @@ To enumerate all reachable cube shapes we need:
 How to check if two cubes are the same? Let's consider two cubes equal if one of cubes may
 be get from another by rotating it's sides or by 180 degrees rotating of the whole cube.
 
-Some REPL play around gives the full list of reachable `Side` shapes:
+Some REPL play around gives the full list of reachable `Side` shapes, 29 in total:
 
 ![side](docs/side-shapes.jpg) 
 
-The evolution of reachable unseen `Cube` shapes from `done` cube:
+The evolution of reachable unseen `Cube` shapes from `done` cube, 90 in total:
 
 ![side](docs/step0-3.jpg)
 ![side](docs/step3-4.jpg)
