@@ -2,7 +2,7 @@
 
 Having fun with [square-1 puzzle](https://en.wikipedia.org/wiki/Square-1_%28puzzle%29)
 
-![square-1](https://en.wikipedia.org/wiki/File:Square-1_scrambled.jpg)
+![square-1](docs/200px-Square-1_scrambled.jpg)
 
 # Chapter one: Shapes
  * How many reachable shapes (ignoring elements colors) exist?
