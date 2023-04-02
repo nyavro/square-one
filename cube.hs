@@ -76,7 +76,7 @@ flippableRotations = (>>= splitSide) . distinctRotations
 flipPair :: ([Piece],[Piece]) -> ([Piece],[Piece]) -> Cube
 flipPair (upH,upL) (downH, downL) = Cube (Side (downL++upH) False) (Side (upL ++ downH) False)
 
---Flips cube around axis 11/0 -- 6/5
+--Flips cube in plane 11/0 -- 6/5
 flipCube :: Cube -> [Cube]
 flipCube (Cube up down) = do
     upSplit <- splitSide up
@@ -92,21 +92,18 @@ minifyCube (Cube up down) = Cube up' down' where
 derivedCubes :: Cube -> [Cube]
 derivedCubes (Cube up down) = nub [minifyCube $ flipPair up' down' | up' <- flippableRotations up, down' <- flippableRotations down]
 
-
 --Gets cubes derived from given cubes with path
 traceStep :: [[Cube]] -> State (Map Cube [Cube]) [[Cube]]
 traceStep [] = do
     return []
 traceStep (path:cs) = do
     let cube = head path
-    mp <- get
-    if (cube `member` mp)
-        then (traceStep cs)
-        else do
     let derived = derivedCubes cube
-    let new = map (:path) $ filter (not.(`member` mp)) derived
+    mp <- get
     put (insert cube derived mp)
     rest <- traceStep cs
+    mp <- get
+    let new = map (:path) $ filter (not.(`member` mp)) derived
     return (new ++ rest)
 
 --Trace of cube transitions between two states
@@ -124,15 +121,14 @@ steps cube = iterate fn ([cube], empty) where
     step [] = do
         return []
     step (cube:cs) = do
-        --current map of cube to it's derived cubes
-        mp <- get
-        if (cube `member` mp)
-            then (step cs)
-            else do
         let derived = derivedCubes cube
-        let new = filter (not.(`member` mp)) derived
+        mp <- get
         put (insert cube derived mp)
         rest <- step cs
-        return (new++rest)
+        mp <- get
+        return $ nub $ filter (not.(`member` mp)) (derived++rest)
 
-
+shorten cube = "Cube " ++ (shorten' $ up cube) ++ " " ++ (shorten' $ down cube) where
+    shorten' = (>>= fn) . pieces
+    fn Kite = "11"
+    fn Triangle = "0"
